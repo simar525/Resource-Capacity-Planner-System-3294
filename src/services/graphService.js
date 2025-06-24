@@ -1,4 +1,4 @@
-import { Client } from 'microsoft-graph-client';
+import { Client } from '@microsoft/microsoft-graph-client';
 import { msalInstance } from '../config/msalConfig';
 
 class GraphService {
@@ -15,22 +15,35 @@ class GraphService {
         throw new Error('No authenticated accounts found');
       }
 
+      console.log('🔐 Found account:', accounts[0].username);
+      console.log('🔐 Account type:', accounts[0].idTokenClaims?.tid ? 'Work/School' : 'Personal');
+
       const silentRequest = {
-        scopes: ['https://graph.microsoft.com/Files.ReadWrite'],
+        scopes: [
+          'https://graph.microsoft.com/Files.ReadWrite',
+          'https://graph.microsoft.com/Sites.ReadWrite.All',
+          'https://graph.microsoft.com/User.Read'
+        ],
         account: accounts[0]
       };
 
+      console.log('🔑 Acquiring token...');
       const response = await msalInstance.acquireTokenSilent(silentRequest);
-      
+      console.log('✅ Token acquired successfully');
+
       this.graphClient = Client.init({
         authProvider: (done) => {
           done(null, response.accessToken);
         }
       });
 
+      // Test the connection
+      const userInfo = await this.graphClient.api('/me').get();
+      console.log('👤 Connected as:', userInfo.displayName, userInfo.userPrincipalName);
+
       return this.graphClient;
     } catch (error) {
-      console.error('Failed to initialize Graph client:', error);
+      console.error('❌ Failed to initialize Graph client:', error);
       throw error;
     }
   }
@@ -42,57 +55,102 @@ class GraphService {
         await this.initializeGraphClient();
       }
 
+      console.log('🔍 Looking for existing workbook:', workbookName);
+
       // First, try to find existing workbook
       const driveItems = await this.graphClient
         .api('/me/drive/root/children')
         .filter(`name eq '${workbookName}'`)
         .get();
 
+      console.log('📁 Drive items found:', driveItems.value.length);
+
       if (driveItems.value.length > 0) {
         this.workbookId = driveItems.value[0].id;
-        console.log('Found existing workbook:', this.workbookId);
+        console.log('📋 Found existing workbook:', this.workbookId);
+        console.log('🌐 Workbook URL:', `https://onedrive.live.com/edit.aspx?resid=${this.workbookId}`);
       } else {
         // Create new workbook
+        console.log('🆕 Creating new workbook...');
         const newWorkbook = await this.createWorkbook(workbookName);
         this.workbookId = newWorkbook.id;
-        console.log('Created new workbook:', this.workbookId);
+        console.log('✅ Created new workbook:', this.workbookId);
+        console.log('🌐 New workbook URL:', `https://onedrive.live.com/edit.aspx?resid=${this.workbookId}`);
       }
 
       // Initialize worksheets
+      console.log('📊 Initializing worksheets...');
       await this.initializeWorksheets();
+      console.log('✅ Worksheets initialized successfully');
+
       return this.workbookId;
     } catch (error) {
-      console.error('Failed to initialize workbook:', error);
+      console.error('❌ Failed to initialize workbook:', error);
+      
+      // More detailed error information
+      if (error.message.includes('Forbidden')) {
+        console.error('📛 Permission Error: Check if your account has OneDrive access');
+      } else if (error.message.includes('Unauthorized')) {
+        console.error('🚫 Authentication Error: Token might be invalid');
+      } else if (error.message.includes('NotFound')) {
+        console.error('🔍 Not Found: Drive or folder not accessible');
+      }
+      
       throw error;
     }
   }
 
   // Create new Excel workbook
   async createWorkbook(name) {
-    const workbook = {
-      name: name,
-      file: {},
-      '@microsoft.graph.conflictBehavior': 'rename'
-    };
+    try {
+      console.log('📝 Creating workbook with name:', name);
+      
+      // Create an empty Excel file
+      const workbook = {
+        name: name,
+        file: {},
+        '@microsoft.graph.conflictBehavior': 'rename'
+      };
 
-    const response = await this.graphClient
-      .api('/me/drive/root/children')
-      .post(workbook);
+      const response = await this.graphClient
+        .api('/me/drive/root/children')
+        .post(workbook);
 
-    return response;
+      console.log('✅ Workbook created successfully:', response.id);
+      return response;
+    } catch (error) {
+      console.error('❌ Failed to create workbook:', error);
+      throw error;
+    }
   }
 
   // Initialize all required worksheets
   async initializeWorksheets() {
     const worksheets = [
-      { name: 'Projects', headers: ['ID', 'Name', 'Description', 'Status', 'StartDate', 'EndDate', 'CreatedBy'] },
-      { name: 'Resources', headers: ['ID', 'Name', 'Email', 'Role', 'Department', 'ManagerID', 'Skills', 'Avatar'] },
-      { name: 'ProjectLinks', headers: ['ID', 'ProjectID', 'ResourceID', 'ManagerID', 'AllocationPercentage'] },
-      { name: 'TimeEntries', headers: ['ID', 'ResourceID', 'ProjectID', 'ManagerID', 'Date', 'ForecastHours', 'ActualHours', 'Notes'] },
-      { name: 'ProjectManagers', headers: ['ID', 'Name', 'Email', 'Department', 'Avatar'] }
+      {
+        name: 'Projects',
+        headers: ['ID', 'Name', 'Description', 'Status', 'StartDate', 'EndDate', 'CreatedBy']
+      },
+      {
+        name: 'Resources',
+        headers: ['ID', 'Name', 'Email', 'Role', 'Department', 'ManagerID', 'Skills', 'Avatar']
+      },
+      {
+        name: 'ProjectLinks',
+        headers: ['ID', 'ProjectID', 'ResourceID', 'ManagerID', 'AllocationPercentage']
+      },
+      {
+        name: 'TimeEntries',
+        headers: ['ID', 'ResourceID', 'ProjectID', 'ManagerID', 'Date', 'ForecastHours', 'ActualHours', 'Notes']
+      },
+      {
+        name: 'ProjectManagers',
+        headers: ['ID', 'Name', 'Email', 'Department', 'Avatar']
+      }
     ];
 
     for (const worksheet of worksheets) {
+      console.log(`📋 Processing worksheet: ${worksheet.name}`);
       await this.createWorksheet(worksheet.name, worksheet.headers);
     }
   }
@@ -100,31 +158,65 @@ class GraphService {
   // Create worksheet with headers
   async createWorksheet(name, headers) {
     try {
+      console.log(`🔍 Checking if worksheet '${name}' exists...`);
+      
       // Check if worksheet exists
       const existingWorksheets = await this.graphClient
         .api(`/me/drive/items/${this.workbookId}/workbook/worksheets`)
         .get();
 
       const exists = existingWorksheets.value.some(ws => ws.name === name);
-      
+      console.log(`📋 Worksheet '${name}' exists:`, exists);
+
       if (!exists) {
+        console.log(`🆕 Creating worksheet: ${name}`);
+        
         // Create worksheet
         const worksheet = await this.graphClient
           .api(`/me/drive/items/${this.workbookId}/workbook/worksheets`)
           .post({ name });
 
+        console.log(`✅ Created worksheet: ${name}`);
+
         // Add headers
         const range = `${name}!A1:${String.fromCharCode(64 + headers.length)}1`;
+        console.log(`📝 Adding headers to range: ${range}`);
+        
         await this.graphClient
           .api(`/me/drive/items/${this.workbookId}/workbook/worksheets/${name}/range(address='${range}')`)
           .patch({
             values: [headers]
           });
 
-        console.log(`Created worksheet: ${name}`);
+        console.log(`✅ Headers added to worksheet: ${name}`);
+      } else {
+        console.log(`✅ Worksheet '${name}' already exists`);
       }
     } catch (error) {
-      console.error(`Failed to create worksheet ${name}:`, error);
+      console.error(`❌ Failed to create worksheet ${name}:`, error);
+      
+      // Don't throw error for worksheet creation failures, just log them
+      if (error.message.includes('InvalidRequest')) {
+        console.warn(`⚠️ Worksheet '${name}' might already exist or have invalid name`);
+      }
+    }
+  }
+
+  // Test drive access
+  async testDriveAccess() {
+    try {
+      console.log('🧪 Testing drive access...');
+      
+      const drive = await this.graphClient.api('/me/drive').get();
+      console.log('✅ Drive access successful:', drive.driveType, drive.id);
+      
+      const rootItems = await this.graphClient.api('/me/drive/root/children').get();
+      console.log('📁 Root items count:', rootItems.value.length);
+      
+      return true;
+    } catch (error) {
+      console.error('❌ Drive access failed:', error);
+      return false;
     }
   }
 
@@ -167,7 +259,7 @@ class GraphService {
 
       // Prepare data for Excel
       const headers = Object.keys(data[0]);
-      const values = data.map(item => 
+      const values = data.map(item =>
         headers.map(header => {
           const value = item[header];
           if (Array.isArray(value)) {
@@ -223,7 +315,7 @@ class GraphService {
     try {
       const existingData = await this.readWorksheetData(worksheetName);
       const rowIndex = existingData.findIndex(item => item[idField] == rowData[idField]);
-      
+
       if (rowIndex === -1) {
         throw new Error(`Row with ${idField} ${rowData[idField]} not found`);
       }
@@ -255,7 +347,6 @@ class GraphService {
     try {
       const existingData = await this.readWorksheetData(worksheetName);
       const filteredData = existingData.filter(item => item[idField] != id);
-      
       await this.writeWorksheetData(worksheetName, filteredData);
       console.log(`Deleted row from worksheet: ${worksheetName}`);
     } catch (error) {
@@ -277,10 +368,7 @@ class GraphService {
 
       // Transform data back to application format
       const transformedData = {
-        projects: projects.map(p => ({
-          ...p,
-          id: parseInt(p.ID) || Date.now()
-        })),
+        projects: projects.map(p => ({ ...p, id: parseInt(p.ID) || Date.now() })),
         resources: resources.map(r => ({
           ...r,
           id: parseInt(r.ID) || Date.now(),
@@ -305,10 +393,7 @@ class GraphService {
           actualHours: parseFloat(te.ActualHours),
           date: te.Date
         })),
-        projectManagers: managers.map(m => ({
-          ...m,
-          id: parseInt(m.ID) || Date.now()
-        }))
+        projectManagers: managers.map(m => ({ ...m, id: parseInt(m.ID) || Date.now() }))
       };
 
       return transformedData;

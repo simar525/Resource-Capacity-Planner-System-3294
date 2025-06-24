@@ -3,7 +3,7 @@ import { useExcel } from '../context/ExcelContext';
 import SafeIcon from '../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
 
-const { FiCloud, FiCloudOff, FiRefreshCw, FiCheck, FiAlert, FiSettings, FiLogIn, FiLogOut } = FiIcons;
+const { FiCloud, FiCloudOff, FiRefreshCw, FiCheck, FiAlert, FiSettings, FiLogIn, FiLogOut, FiExternalLink, FiInfo, FiTestTube, FiPlay } = FiIcons;
 
 function ExcelConnectionPanel() {
   const {
@@ -13,6 +13,8 @@ function ExcelConnectionPanel() {
     error,
     lastSync,
     autoSyncEnabled,
+    debugInfo,
+    msalInitialized,
     setAutoSyncEnabled,
     signIn,
     signOut,
@@ -36,6 +38,7 @@ function ExcelConnectionPanel() {
   };
 
   const getStatusText = () => {
+    if (!msalInitialized) return 'Initializing...';
     if (isLoading) return 'Connecting...';
     if (error) return 'Connection Error';
     if (isConnected) return 'Connected to Excel';
@@ -43,20 +46,35 @@ function ExcelConnectionPanel() {
     return 'Not Signed In';
   };
 
+  const testConnection = async () => {
+    console.log('🧪 Testing connection manually...');
+    try {
+      await initializeExcelConnection();
+    } catch (err) {
+      console.error('❌ Test connection failed:', err);
+    }
+  };
+
+  // Debug: log current state
+  console.log('🔍 Excel Panel State:', {
+    msalInitialized,
+    isAuthenticated,
+    isConnected,
+    isLoading,
+    error,
+    debugInfo
+  });
+
   return (
     <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center space-x-3">
-          <SafeIcon 
-            icon={getStatusIcon()} 
-            className={`h-6 w-6 ${getStatusColor()} ${isLoading ? 'animate-spin' : ''}`} 
-          />
+          <SafeIcon icon={getStatusIcon()} className={`h-6 w-6 ${getStatusColor()} ${isLoading ? 'animate-spin' : ''}`} />
           <div>
             <h3 className="text-lg font-medium text-gray-900">Excel Integration</h3>
             <p className={`text-sm ${getStatusColor()}`}>{getStatusText()}</p>
           </div>
         </div>
-        
         <div className="flex items-center space-x-2">
           {isAuthenticated ? (
             <button
@@ -69,15 +87,87 @@ function ExcelConnectionPanel() {
           ) : (
             <button
               onClick={signIn}
-              disabled={isLoading}
+              disabled={isLoading || !msalInitialized}
               className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
             >
               <SafeIcon icon={FiLogIn} className="h-4 w-4" />
-              <span>Sign In to Microsoft</span>
+              <span>{!msalInitialized ? 'Initializing...' : 'Sign In to Microsoft'}</span>
             </button>
           )}
         </div>
       </div>
+
+      {/* Show debug info about authentication state */}
+      <div className="mb-4 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+        <div className="text-xs text-gray-600">
+          <p><strong>Debug Info:</strong></p>
+          <p>• MSAL Initialized: {msalInitialized ? 'Yes' : 'No'}</p>
+          <p>• Authenticated: {isAuthenticated ? 'Yes' : 'No'}</p>
+          <p>• Connected: {isConnected ? 'Yes' : 'No'}</p>
+          <p>• Loading: {isLoading ? 'Yes' : 'No'}</p>
+          {debugInfo?.account && <p>• Account: {debugInfo.account}</p>}
+          {error && <p>• Error: {error}</p>}
+        </div>
+      </div>
+
+      {/* Show initialization status */}
+      {!msalInitialized && (
+        <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <div className="flex items-center space-x-2">
+            <SafeIcon icon={FiRefreshCw} className="h-4 w-4 text-blue-500 animate-spin" />
+            <span className="text-sm font-medium text-blue-800">Initializing Authentication System...</span>
+          </div>
+          <p className="text-xs text-blue-600 mt-1">Please wait while we set up the Microsoft authentication system.</p>
+        </div>
+      )}
+
+      {/* Connection controls - only show when MSAL is initialized */}
+      {msalInitialized && (isAuthenticated || debugInfo?.account) && (
+        <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <h4 className="text-sm font-medium text-blue-800 mb-3">Excel Connection Controls</h4>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={initializeExcelConnection}
+              disabled={isLoading}
+              className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+            >
+              <SafeIcon icon={FiPlay} className="h-4 w-4" />
+              <span>Initialize Excel Connection</span>
+            </button>
+            <button
+              onClick={testConnection}
+              disabled={isLoading}
+              className="flex items-center space-x-2 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+            >
+              <SafeIcon icon={FiTestTube} className="h-4 w-4" />
+              <span>Debug Test</span>
+            </button>
+          </div>
+          <p className="text-xs text-blue-600 mt-2">
+            💡 Click "Initialize Excel Connection" to create the workbook in your OneDrive
+          </p>
+        </div>
+      )}
+
+      {/* Troubleshooting for when MSAL is initialized but no auth detected */}
+      {msalInitialized && !isAuthenticated && !debugInfo?.account && (
+        <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+          <h4 className="text-sm font-medium text-yellow-800 mb-3">Ready to Connect</h4>
+          <p className="text-sm text-yellow-700 mb-3">
+            Authentication system is ready. Click "Sign In to Microsoft" above to get started.
+          </p>
+          <div className="space-y-2">
+            <button
+              onClick={signIn}
+              disabled={isLoading}
+              className="flex items-center space-x-2 px-3 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors text-sm disabled:opacity-50"
+            >
+              <SafeIcon icon={FiPlay} className="h-4 w-4" />
+              <span>Force Sign In</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {error && (
         <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
@@ -86,35 +176,77 @@ function ExcelConnectionPanel() {
             <div>
               <p className="text-sm font-medium text-red-800">Connection Error</p>
               <p className="text-sm text-red-700">{error}</p>
-              {isAuthenticated && (
-                <button
-                  onClick={initializeExcelConnection}
-                  className="mt-2 text-sm text-red-600 hover:text-red-800 font-medium"
-                >
-                  Retry Connection
-                </button>
+              {msalInitialized && (
+                <div className="mt-2 space-x-2">
+                  <button
+                    onClick={initializeExcelConnection}
+                    className="text-sm text-red-600 hover:text-red-800 font-medium"
+                  >
+                    Retry Connection
+                  </button>
+                  <button
+                    onClick={testConnection}
+                    className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                  >
+                    Debug Test
+                  </button>
+                </div>
               )}
             </div>
           </div>
         </div>
       )}
 
-      {isAuthenticated && (
+      {/* Debug Information */}
+      {debugInfo && (
+        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+          <div className="flex items-start space-x-2">
+            <SafeIcon icon={FiInfo} className="h-4 w-4 text-blue-500 mt-0.5" />
+            <div className="text-sm">
+              <p className="font-medium text-blue-800">Debug Information</p>
+              <p className="text-blue-700">Account: {debugInfo.account}</p>
+              {debugInfo.workbookId && (
+                <div className="mt-1">
+                  <p className="text-blue-700">Workbook ID: {debugInfo.workbookId.substring(0, 20)}...</p>
+                  <div className="mt-2 space-x-2">
+                    <a
+                      href="https://onedrive.live.com"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center space-x-1 text-blue-600 hover:text-blue-800 font-medium"
+                    >
+                      <span>Open OneDrive</span>
+                      <SafeIcon icon={FiExternalLink} className="h-3 w-3" />
+                    </a>
+                    <a
+                      href={`https://onedrive.live.com/edit.aspx?resid=${debugInfo.workbookId}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center space-x-1 text-green-600 hover:text-green-800 font-medium"
+                    >
+                      <span>Open Excel File</span>
+                      <SafeIcon icon={FiExternalLink} className="h-3 w-3" />
+                    </a>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {msalInitialized && (isAuthenticated || debugInfo?.account) && (
         <div className="space-y-4">
           {/* Connection Status */}
           <div className="grid grid-cols-2 gap-4">
             <div className="p-3 bg-gray-50 rounded-lg">
               <div className="flex items-center space-x-2">
-                <SafeIcon 
-                  icon={isConnected ? FiCheck : FiCloudOff} 
-                  className={`h-4 w-4 ${isConnected ? 'text-green-500' : 'text-gray-400'}`} 
-                />
+                <SafeIcon icon={isConnected ? FiCheck : FiCloudOff} className={`h-4 w-4 ${isConnected ? 'text-green-500' : 'text-gray-400'}`} />
                 <span className="text-sm font-medium text-gray-700">
                   {isConnected ? 'Excel Connected' : 'Excel Disconnected'}
                 </span>
               </div>
             </div>
-            
             <div className="p-3 bg-gray-50 rounded-lg">
               <div className="flex items-center space-x-2">
                 <SafeIcon icon={FiRefreshCw} className="h-4 w-4 text-gray-400" />
@@ -153,7 +285,6 @@ function ExcelConnectionPanel() {
                 <SafeIcon icon={FiRefreshCw} className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
                 <span>Sync from Excel</span>
               </button>
-              
               <button
                 onClick={() => syncToExcel()}
                 disabled={isLoading}
@@ -161,26 +292,6 @@ function ExcelConnectionPanel() {
               >
                 <SafeIcon icon={FiRefreshCw} className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
                 <span>Sync to Excel</span>
-              </button>
-            </div>
-          )}
-
-          {/* Setup Instructions */}
-          {isAuthenticated && !isConnected && !error && (
-            <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-              <h4 className="text-sm font-medium text-yellow-800 mb-2">Setup Required</h4>
-              <div className="text-sm text-yellow-700 space-y-1">
-                <p>1. Ensure you have an Excel file in your OneDrive</p>
-                <p>2. The app will create worksheets automatically</p>
-                <p>3. Grant necessary permissions when prompted</p>
-              </div>
-              <button
-                onClick={initializeExcelConnection}
-                disabled={isLoading}
-                className="mt-3 flex items-center space-x-2 px-3 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors disabled:opacity-50"
-              >
-                <SafeIcon icon={FiRefreshCw} className="h-4 w-4" />
-                <span>Initialize Excel Connection</span>
               </button>
             </div>
           )}
@@ -209,6 +320,19 @@ function ExcelConnectionPanel() {
           </div>
         </div>
       </div>
+
+      {/* Instructions */}
+      {msalInitialized && !(isAuthenticated || debugInfo?.account) && (
+        <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+          <h4 className="text-sm font-medium text-yellow-800 mb-2">Getting Started</h4>
+          <div className="text-sm text-yellow-700 space-y-1">
+            <p>1. Click "Sign In to Microsoft" above</p>
+            <p>2. Grant permissions when prompted</p>
+            <p>3. Then click "Initialize Excel Connection"</p>
+            <p>4. Check OneDrive for your new Excel file</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

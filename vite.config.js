@@ -21,7 +21,7 @@ export default defineConfig({
           router: ['react-router-dom'],
           icons: ['react-icons'],
           charts: ['echarts', 'echarts-for-react'],
-          microsoft: ['@azure/msal-browser', '@azure/msal-react', 'microsoft-graph-client']
+          microsoft: ['@azure/msal-browser', '@azure/msal-react', '@microsoft/microsoft-graph-client']
         }
       }
     }
@@ -33,7 +33,7 @@ export default defineConfig({
     include: [
       '@azure/msal-browser',
       '@azure/msal-react', 
-      'microsoft-graph-client',
+      '@microsoft/microsoft-graph-client',
       'isomorphic-fetch'
     ]
   }

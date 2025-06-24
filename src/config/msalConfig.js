@@ -3,13 +3,28 @@ import { Configuration, PublicClientApplication } from '@azure/msal-browser';
 // MSAL configuration
 export const msalConfig = {
   auth: {
-    clientId: 'YOUR_CLIENT_ID', // Replace with your Azure App Registration Client ID
-    authority: 'https://login.microsoftonline.com/common',
+    // Your actual Client ID from Azure Portal
+    clientId: '7a6b8b97-6408-44ec-8937-e18bda589337',
+    
+    // For Personal Microsoft accounts only (@outlook.com, @hotmail.com, @live.com)
+    authority: 'https://login.microsoftonline.com/consumers',
+    
     redirectUri: window.location.origin
   },
   cache: {
     cacheLocation: 'localStorage',
     storeAuthStateInCookie: false
+  },
+  system: {
+    loggerOptions: {
+      loggerCallback: (level, message, containsPii) => {
+        if (!containsPii) {
+          console.log(`[MSAL ${level}] ${message}`);
+        }
+      },
+      piiLoggingEnabled: false,
+      logLevel: 'Info'
+    }
   }
 };
 

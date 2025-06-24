@@ -6,7 +6,7 @@ A comprehensive capacity management system with real-time Excel synchronization 
 
 ### Core Functionality
 - **Project Management**: Create and manage projects with status tracking
-- **Resource Management**: Manage team members with skills and allocations
+- **Resource Management**: Manage team members with skills and allocations  
 - **Capacity Planning**: Set percentage-based allocations per project
 - **Time Tracking**: Log forecast vs actual hours with variance analysis
 - **Analytics & Reporting**: Advanced analytics with predictive insights
@@ -25,36 +25,61 @@ A comprehensive capacity management system with real-time Excel synchronization 
 1. Go to [Azure Portal](https://portal.azure.com)
 2. Navigate to "App registrations" → "New registration"
 3. Configure:
-   - **Name**: Capacity Management App
-   - **Supported account types**: Accounts in any organizational directory and personal Microsoft accounts
+   - **Name**: Excel to app integration (or your preferred name)
+   - **Supported account types**: Choose one of:
+     - **Personal Microsoft accounts only** (for personal OneDrive)
+     - **Work or school accounts only** (for organizational accounts)
+     - **Any Microsoft account** (requires multi-tenant configuration)
    - **Redirect URI**: `http://localhost:5173` (for development)
 
-4. Note down the **Application (client) ID**
+4. Note down the **Application (client) ID**: `838f42d7-ad47-425d-bb96-f5e9818fb111`
 
 5. Go to "API permissions" → "Add a permission" → "Microsoft Graph"
 6. Add these **Delegated permissions**:
    - `Files.ReadWrite`
-   - `Sites.ReadWrite.All`
+   - `Sites.ReadWrite.All` 
    - `User.Read`
-
 7. Grant admin consent for the permissions
 
-### 2. Configure the Application
+### 2. Configure Authority Endpoint
 
-1. Open `src/config/msalConfig.js`
-2. Replace `YOUR_CLIENT_ID` with your Azure App Registration Client ID:
+Based on your Azure App Registration configuration, choose the correct authority in `src/config/msalConfig.js`:
 
 ```javascript
-export const msalConfig = {
-  auth: {
-    clientId: 'your-actual-client-id-here',
-    authority: 'https://login.microsoftonline.com/common',
-    redirectUri: window.location.origin
-  }
-};
+// For PERSONAL Microsoft accounts only (OneDrive personal)
+authority: 'https://login.microsoftonline.com/consumers'
+
+// For WORK/SCHOOL accounts only (OneDrive for Business)
+authority: 'https://login.microsoftonline.com/organizations'
+
+// For BOTH personal and work accounts (requires multi-tenant app)
+authority: 'https://login.microsoftonline.com/common'
+
+// For specific tenant only
+authority: 'https://login.microsoftonline.com/YOUR-TENANT-ID'
 ```
 
-### 3. Excel Workbook Structure
+### 3. Multi-Tenant Configuration (Optional)
+
+If you want to support both personal and work accounts:
+
+1. In Azure Portal, go to your App Registration
+2. Navigate to "Authentication"
+3. Under "Supported account types", select:
+   - **"Accounts in any organizational directory and personal Microsoft accounts"**
+4. Update your `msalConfig.js` to use:
+   ```javascript
+   authority: 'https://login.microsoftonline.com/common'
+   ```
+
+### 4. Current Configuration
+
+The app is currently configured for **personal Microsoft accounts only**:
+- Authority: `https://login.microsoftonline.com/consumers`
+- This works with personal OneDrive accounts
+- Change to `/organizations` for work accounts or `/common` for both
+
+### 5. Excel Workbook Structure
 
 The application automatically creates these worksheets in Excel:
 
@@ -76,7 +101,7 @@ The application automatically creates these worksheets in Excel:
 ## 🔐 Authentication Flow
 
 1. **Sign In**: Click "Sign In to Microsoft" to authenticate
-2. **Consent**: Grant permissions for file access
+2. **Consent**: Grant permissions for file access  
 3. **Initialize**: App creates/finds Excel workbook in OneDrive
 4. **Sync**: Data automatically synchronizes between app and Excel
 
@@ -137,7 +162,6 @@ npm run build
 ## 📝 API Permissions
 
 The app requires these Microsoft Graph permissions:
-
 - **Files.ReadWrite**: Read and write access to user files
 - **Sites.ReadWrite.All**: Read and write access to SharePoint sites  
 - **User.Read**: Read user profile information
@@ -146,26 +170,35 @@ The app requires these Microsoft Graph permissions:
 
 ### Common Issues
 
-**1. Authentication Failed**
-- Verify Client ID in `msalConfig.js`
-- Check Azure App Registration configuration
-- Ensure redirect URI matches exactly
+**1. AADSTS50194 Error (Multi-tenant Issue)**
+- **Problem**: App configured as single-tenant but using `/common` endpoint
+- **Solution**: Update `authority` in `msalConfig.js`:
+  - For personal accounts: `https://login.microsoftonline.com/consumers`
+  - For work accounts: `https://login.microsoftonline.com/organizations`
+  - For both: Configure app as multi-tenant in Azure Portal
 
-**2. Excel Connection Error**
+**2. Authentication Failed**
+- Verify Client ID in `msalConfig.js`
+- Check Azure App Registration configuration  
+- Ensure redirect URI matches exactly
+- Verify account type matches authority endpoint
+
+**3. Excel Connection Error**
 - Verify OneDrive access permissions
 - Check if Excel Online is available in your tenant
 - Try manual connection initialization
 
-**3. Sync Issues**
+**4. Sync Issues**
 - Check internet connectivity
 - Verify Excel workbook isn't open in desktop Excel
 - Try manual sync buttons
 
-**4. Permission Denied**
+**5. Permission Denied**  
 - Re-authenticate and grant all requested permissions
 - Contact admin if in organizational tenant
 
 ### Debug Mode
+
 Enable debug logging by setting:
 ```javascript
 // In msalConfig.js
@@ -187,7 +220,7 @@ export const msalConfig = {
 
 - **Predictive Analytics**: AI-powered capacity forecasting
 - **Utilization Heatmaps**: Visual capacity analysis
-- **Burnout Detection**: Resource overallocation alerts
+- **Burnout Detection**: Resource overallocation alerts  
 - **Variance Analysis**: Forecast vs actual time tracking
 - **Multi-tenant Support**: Works with personal and organizational accounts
 
